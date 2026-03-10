@@ -79,6 +79,7 @@ avg_gm = (totals["追加粗利"] / totals["追加売上高"]) if totals["追加�
 # ---- Header
 st.title("SKU 売上・粗利シミュレーター（ヨドバシ／MonotaRO／ASKUL）")
 st.caption("配分・単価・粗利率・増加SKUを調整すると、10年間の『追加売上』と『追加粗利』が即時計算されます。")
+st.info("📋 アカウントプラン作成ツールはサイドバーの **Account Plan** から利用できます。", icon="💡")
 
 # ---- KPI Row
 kpi1, kpi2, kpi3 = st.columns(3)
