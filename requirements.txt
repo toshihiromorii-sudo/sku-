@@ -1,4 +1,13 @@
+# 既存アプリ（SKUシミュレーター）
 streamlit==1.37.1
 pandas>=2.0
 numpy>=1.25
 altair>=5.0
+
+# 日程調整ツール（Google API）
+google-api-python-client>=2.100.0
+google-auth>=2.23.0
+google-auth-httplib2>=0.2.0
+
+# タイムゾーンデータ（zoneinfo / Windows 環境で必要）
+tzdata>=2024.1
