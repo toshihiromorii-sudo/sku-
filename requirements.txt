@@ -9,5 +9,8 @@ google-api-python-client>=2.100.0
 google-auth>=2.23.0
 google-auth-httplib2>=0.2.0
 
+# 欄①の自然言語解析（Claude API）
+anthropic>=0.40.0
+
 # タイムゾーンデータ（zoneinfo / Windows 環境で必要）
 tzdata>=2024.1

@@ -4,7 +4,8 @@ Google Calendar API クライアント
 必要な準備:
   1. Google Cloud Console でサービスアカウントを作成し JSON キーをダウンロード
   2. Google Workspace 管理コンソールで「ドメイン全体の委任」を有効化
-     スコープ: https://www.googleapis.com/auth/calendar.readonly
+     読み取り: https://www.googleapis.com/auth/calendar.readonly
+     書き込み: https://www.googleapis.com/auth/calendar
   3. このファイルをプロジェクトルートに置き、認証 JSON パスを指定する
 """
 
@@ -112,3 +113,114 @@ def parse_events(raw_events: list) -> list:
             }
         )
     return parsed
+
+
+# ── 書き込み用（イベント作成） ──────────────────────────────────────
+
+WRITE_SCOPES = ["https://www.googleapis.com/auth/calendar"]
+
+
+def get_write_service(credentials_path: str, organizer_email: str):
+    """
+    イベント作成・更新用の Calendar サービスを返す。
+    主催者のメールアドレスを impersonate する。
+    """
+    creds = service_account.Credentials.from_service_account_file(
+        credentials_path,
+        scopes=WRITE_SCOPES,
+    ).with_subject(organizer_email)
+    return build("calendar", "v3", credentials=creds, cache_discovery=False)
+
+
+def create_event(
+    service,
+    title: str,
+    start: datetime.datetime,
+    end: datetime.datetime,
+    attendee_emails: list,
+    description: str = "",
+) -> dict:
+    """
+    カレンダーにイベントを作成し、参加者全員に通知メールを送る。
+
+    Args:
+        service          : get_write_service() で取得したサービス
+        title            : イベントタイトル
+        start / end      : 開始・終了日時（JST aware datetime）
+        attendee_emails  : 参加者のメールアドレスリスト
+        description      : イベント本文（任意）
+
+    Returns:
+        作成されたイベントの dict（htmlLink キーに URL が入る）
+    """
+    body = {
+        "summary": title,
+        "description": description,
+        "start": {
+            "dateTime": start.isoformat(),
+            "timeZone": "Asia/Tokyo",
+        },
+        "end": {
+            "dateTime": end.isoformat(),
+            "timeZone": "Asia/Tokyo",
+        },
+        "attendees": [{"email": e} for e in attendee_emails],
+        "reminders": {"useDefault": True},
+    }
+    return (
+        service.events()
+        .insert(calendarId="primary", body=body, sendUpdates="all")
+        .execute()
+    )
+
+
+def parse_slot_text(text: str) -> list:
+    """
+    貼り付けられたテキストから日程スロットを解析する。
+
+    対応フォーマット:
+      3/12（水）10:00〜11:00
+      3月12日（水）10:00 ～ 11:00
+      2026/3/12 10:00-11:00
+
+    Returns:
+        [{"start": datetime (JST), "end": datetime (JST)}, ...]
+    """
+    today = datetime.date.today()
+    pattern = re.compile(
+        r"(?:(\d{4})[/年])?"          # 年（省略可）
+        r"(\d{1,2})[/月]"              # 月
+        r"(\d{1,2})日?"                # 日
+        r"(?:[（(][^\)）]*[）)])?"      # 曜日（省略可）
+        r"\s*"
+        r"(\d{1,2}):(\d{2})"           # 開始時刻
+        r"\s*[〜～~\-ー－]+\s*"         # 区切り
+        r"(\d{1,2}):(\d{2})"           # 終了時刻
+    )
+    results = []
+    for line in text.strip().split("\n"):
+        m = pattern.search(line.strip())
+        if not m:
+            continue
+        year = int(m.group(1)) if m.group(1) else today.year
+        month, day = int(m.group(2)), int(m.group(3))
+        sh, sm = int(m.group(4)), int(m.group(5))
+        eh, em = int(m.group(6)), int(m.group(7))
+        try:
+            date = datetime.date(year, month, day)
+            # 年未指定かつ過去日なら翌年とみなす
+            if not m.group(1) and date < today:
+                date = datetime.date(today.year + 1, month, day)
+        except ValueError:
+            continue
+        results.append(
+            {
+                "start": datetime.datetime(
+                    date.year, date.month, date.day, sh, sm, tzinfo=JST
+                ),
+                "end": datetime.datetime(
+                    date.year, date.month, date.day, eh, em, tzinfo=JST
+                ),
+            }
+        )
+    return results

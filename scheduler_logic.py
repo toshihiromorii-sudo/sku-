@@ -91,3 +91,46 @@ def find_candidate_slots(
         slot_start += datetime.timedelta(minutes=interval_min)
 
     return slots
+
+
+def merge_consecutive_slots(slots: list) -> list:
+    """
+    連続する候補スロットをマージする。
+
+    例:
+      12:00-13:00（全員空き）+ 13:00-14:00（全員空き）→ 12:00-14:00（全員空き）
+      12:00-13:00（全員空き）+ 13:00-14:00（田中ブロック）→ 12:00-14:00（※田中さんに確認必須）
+
+    同じ日・隣接する時刻のスロットのみマージする。
+    """
+    if not slots:
+        return []
+
+    merged = []
+    cur = {
+        "start": slots[0]["start"],
+        "end": slots[0]["end"],
+        "block_people": list(slots[0]["block_people"]),
+    }
+
+    for slot in slots[1:]:
+        same_day = slot["start"].date() == cur["start"].date()
+        is_adjacent = slot["start"] == cur["end"]
+
+        if same_day and is_adjacent:
+            cur["end"] = slot["end"]
+            for person in slot["block_people"]:
+                if person not in cur["block_people"]:
+                    cur["block_people"].append(person)
+        else:
+            cur["available"] = len(cur["block_people"]) == 0
+            merged.append(cur)
+            cur = {
+                "start": slot["start"],
+                "end": slot["end"],
+                "block_people": list(slot["block_people"]),
+            }
+
+    cur["available"] = len(cur["block_people"]) == 0
+    merged.append(cur)
+    return merged
